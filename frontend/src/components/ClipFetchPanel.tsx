@@ -25,6 +25,7 @@ export function ClipFetchPanel() {
           <tr style={{ textAlign: "left" }}>
             <th>Noun</th>
             <th>Status</th>
+            <th>Quality</th>
             <th>Local file</th>
           </tr>
         </thead>
@@ -36,6 +37,7 @@ export function ClipFetchPanel() {
                 {slot.clip.download_status}
                 {slot.clip.needs_attention ? " ⚠" : ""}
               </td>
+              <td>{slot.clip.download_status === "ready" ? slot.clip.quality : "—"}</td>
               <td style={{ fontFamily: "monospace", fontSize: 10 }}>
                 {slot.clip.local_path ? slot.clip.local_path.split("/").pop() : "—"}
               </td>

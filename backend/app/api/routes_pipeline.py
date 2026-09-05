@@ -13,6 +13,7 @@ from app.models.project import (
     SearchState,
     Slot,
 )
+from app.pipeline.composite_rng import assign_composite_layers
 from app.pipeline.noun_extraction import extract_nouns
 from app.pipeline.search_string_generator import generate_candidates
 from app.pipeline.timing_model import synthesize_and_align
@@ -97,6 +98,8 @@ async def build_project(req: BuildRequest) -> BuildResponse:
                 composite=CompositeState(),
             )
         )
+
+    assign_composite_layers(slots)
 
     project_id = str(uuid.uuid4())
     narration_filename = Path(timing.narration_audio_path).name
