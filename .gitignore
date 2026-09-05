@@ -1,0 +1,18 @@
+# Python
+backend/.venv/
+__pycache__/
+*.pyc
+
+# Backend runtime cache/data
+backend/.cache/
+
+# Node / frontend
+frontend/node_modules/
+frontend/dist/
+
+# Editor/OS
+.DS_Store
+
+# Claude Code runtime state
+.claude/scheduled_tasks.lock
+
