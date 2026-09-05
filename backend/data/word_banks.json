@@ -1,0 +1,39 @@
+{
+  "adj": [
+    "giant", "tiny", "ancient", "futuristic", "broken", "glowing", "invisible",
+    "haunted", "golden", "rusty", "fluffy", "sneaky", "majestic", "cursed",
+    "microscopic", "radioactive", "vintage", "chaotic", "silent", "explosive",
+    "slippery", "magnetic", "frozen", "burning", "inflatable", "sparkly",
+    "gigantic", "mysterious", "forbidden", "legendary"
+  ],
+  "gerund": [
+    "screaming", "exploding", "melting", "flying", "dancing", "crying",
+    "laughing", "spinning", "glowing", "vanishing", "transforming",
+    "collapsing", "sprinting", "whispering", "shattering", "levitating",
+    "malfunctioning", "growing", "shrinking", "vibrating"
+  ],
+  "noun2": [
+    "robot", "dinosaur", "ghost", "alien", "wizard", "shark", "octopus",
+    "dragon", "zombie", "penguin", "volcano", "tornado", "spaceship",
+    "clown", "vampire"
+  ],
+  "location": [
+    "in the rain", "in space", "at the mall", "underwater", "on the moon",
+    "in a volcano", "at a wedding", "in the desert", "on a rollercoaster",
+    "in a haunted house", "at school", "in the jungle", "on live TV",
+    "in a courtroom", "at a birthday party"
+  ],
+  "emotion": [
+    "freakout", "meltdown", "rage", "panic attack", "existential crisis",
+    "nervous breakdown", "tantrum", "outburst"
+  ],
+  "era": [
+    "in the 90s", "in the 1800s", "in the future", "in medieval times",
+    "in the stone age", "in the 2000s", "in ancient Rome", "in the Wild West"
+  ],
+  "genre": [
+    "tutorial", "documentary", "prank", "asmr", "unboxing", "review",
+    "compilation", "fail compilation", "reaction video", "found footage",
+    "mockumentary", "how-to guide"
+  ]
+}
