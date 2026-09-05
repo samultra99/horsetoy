@@ -38,7 +38,7 @@ async def _run_fetch_all(job_id: str, project_id: str) -> None:
         await publish(JobEvent(job_id, "fetching", (i / total) * 100, f"fetching clip for '{slot.noun}'"))
         query = _active_query(slot)
         try:
-            result = await asyncio.to_thread(_fetcher.fetch_by_rank, query, 1)
+            result = await asyncio.to_thread(_fetcher.fetch_by_rank, query, 1, "preview")
         except VideoFetchError as e:
             slot.clip.download_status = "failed"
             slot.clip.needs_attention = True
@@ -47,8 +47,11 @@ async def _run_fetch_all(job_id: str, project_id: str) -> None:
             )
             continue
 
+        slot.clip.video_id = result.video_id
         slot.clip.source_url = result.source_url
+        slot.clip.quality = result.quality
         slot.clip.local_path = result.local_path
+        slot.clip.source_duration = result.duration
         slot.clip.download_status = "ready"
         slot.clip.trim_start = 0.0
         slot.clip.trim_end = min(result.duration, slot.duration) if result.duration else slot.duration

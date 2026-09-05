@@ -22,8 +22,11 @@ class CropRect(BaseModel):
 
 
 class ClipState(BaseModel):
+    video_id: str | None = None
     source_url: str | None = None
+    quality: Literal["preview", "full"] = "preview"
     local_path: str | None = None
+    source_duration: float | None = None
     download_status: Literal["empty", "pending", "ready", "failed"] = "empty"
     trim_start: float = 0.0
     trim_end: float = 0.0

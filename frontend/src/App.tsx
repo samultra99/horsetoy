@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { api } from "./api/client";
 import { ClipFetchPanel } from "./components/ClipFetchPanel";
+import { SlotEditorList } from "./components/Editor/SlotEditorList";
+import { ExportPanel } from "./components/ExportPanel";
 import { TextInputPanel } from "./components/TextInputPanel";
 import { TimelineTrack } from "./components/Timeline/TimelineTrack";
 
@@ -37,6 +39,8 @@ function App() {
       <TextInputPanel />
       <TimelineTrack />
       <ClipFetchPanel />
+      <SlotEditorList />
+      <ExportPanel />
     </main>
   );
 }

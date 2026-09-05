@@ -33,17 +33,34 @@ export interface NounInfo {
   search_candidates: SearchCandidate[];
 }
 
+export interface CropRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
 export interface ClipState {
+  video_id: string | null;
   source_url: string | null;
+  quality: "preview" | "full";
   local_path: string | null;
+  source_duration: number | null;
   download_status: "empty" | "pending" | "ready" | "failed";
   trim_start: number;
   trim_end: number;
-  crop_rect: { x: number; y: number; w: number; h: number };
+  crop_rect: CropRect;
   zoom: number;
   volume: number;
   muted: boolean;
   needs_attention: boolean;
+}
+
+export interface CompositeState {
+  mode: "cut" | "overlay";
+  layer: number;
+  overlay_of: string[];
+  locked: boolean;
 }
 
 export interface Slot {
@@ -54,7 +71,7 @@ export interface Slot {
   search: { candidates: SearchCandidate[]; active_index: number; manual_override: string | null };
   results: { seen_video_ids: string[]; next_rank_to_try: number };
   clip: ClipState;
-  composite: { mode: "cut" | "overlay"; layer: number; overlay_of: string[]; locked: boolean };
+  composite: CompositeState;
 }
 
 export interface BuildResponse {
@@ -73,6 +90,15 @@ export interface Project {
   total_duration: number;
 }
 
+export interface ClipPatch {
+  trim_start?: number;
+  trim_end?: number;
+  crop_rect?: CropRect;
+  zoom?: number;
+  volume?: number;
+  muted?: boolean;
+}
+
 export const api = {
   health: () => request<{ status: string }>("/api/health"),
   buildProject: (text: string) =>
@@ -86,4 +112,19 @@ export const api = {
       body: JSON.stringify({ project_id: projectId }),
     }),
   getProject: (projectId: string) => request<Project>(`/api/project/${projectId}`),
+  exportProject: (projectId: string) =>
+    request<{ export_url: string }>("/api/render/export", {
+      method: "POST",
+      body: JSON.stringify({ project_id: projectId }),
+    }),
+  patchSlotClip: (projectId: string, slotId: string, patch: ClipPatch) =>
+    request<Slot>(`/api/project/${projectId}/slots/${slotId}/clip`, {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    }),
+  rerollComposite: (projectId: string, slotId: string) =>
+    request<{ composite: CompositeState }>("/api/composite/reroll", {
+      method: "POST",
+      body: JSON.stringify({ project_id: projectId, slot_id: slotId }),
+    }),
 };
