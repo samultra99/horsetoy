@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -9,8 +11,14 @@ from app.api.routes_render import router as render_router
 from app.api.routes_search import router as search_router
 from app.api.ws import router as ws_router
 from app.config import CLIPS_CACHE_DIR, EXPORTS_DIR, FRONTEND_DEV_ORIGIN, NARRATION_CACHE_DIR
+from app.startup import check_yt_dlp_update
 
 app = FastAPI(title="HorseToy")
+
+
+@app.on_event("startup")
+async def on_startup() -> None:
+    asyncio.create_task(check_yt_dlp_update())
 
 app.add_middleware(
     CORSMiddleware,

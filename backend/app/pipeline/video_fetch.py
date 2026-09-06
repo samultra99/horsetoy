@@ -39,7 +39,7 @@ import yt_dlp
 from app.config import CLIPS_CACHE_DIR
 
 BLOCKED_MARKERS = ("429", "too many requests", "blocked", "captcha", "sign in to confirm")
-MAX_DOWNLOAD_SECONDS = 90.0
+MAX_DOWNLOAD_SECONDS = 30.0
 
 Quality = Literal["preview", "full"]
 QUALITY_MAX_HEIGHT: dict[Quality, int] = {"preview": 360, "full": 1080}

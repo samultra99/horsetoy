@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.models.project import CropRect, Project, Slot
-from app.state.project_store import get_project
+from app.state.project_store import get_project, save_project
 
 router = APIRouter(prefix="/api/project", tags=["project"])
 
@@ -54,4 +54,5 @@ def patch_slot_clip(project_id: str, slot_id: str, req: ClipPatchRequest) -> Slo
     if req.muted is not None:
         slot.clip.muted = req.muted
 
+    save_project(project)
     return slot

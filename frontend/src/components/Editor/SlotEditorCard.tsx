@@ -37,6 +37,7 @@ export function SlotEditorCard({ slot }: { slot: Slot }) {
   const [panY, setPanY] = useState(initial.panY);
   const [trimStart, setTrimStart] = useState(slot.clip.trim_start);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
     const next = cropRectToZoomPan(slot.clip.crop_rect);
@@ -49,6 +50,18 @@ export function SlotEditorCard({ slot }: { slot: Slot }) {
     // debounced PATCH's own response echoing back.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slot.id]);
+
+  // Preview should only ever show the window that will actually end up in
+  // the export: seek to trim_start immediately when it changes (so dragging
+  // the slider gives instant visual feedback), and loop back to trim_start
+  // once playback reaches the end of the slot's fixed-length window rather
+  // than looping the whole source file.
+  useEffect(() => {
+    const v = videoRef.current;
+    if (v && Math.abs(v.currentTime - trimStart) > 0.05) {
+      v.currentTime = trimStart;
+    }
+  }, [trimStart]);
 
   const scheduleCropPatch = (nextZoom: number, nextPanX: number, nextPanY: number) => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -72,6 +85,19 @@ export function SlotEditorCard({ slot }: { slot: Slot }) {
   const compositeLabel =
     slot.composite.mode === "overlay" ? `overlay ×${slot.composite.layer + 1}` : COMPOSITE_LABEL.cut;
 
+  // Mirrors the backend's crop math exactly: the video is rendered at
+  // zoom×100% of the frame, then shifted by pan × the room left over after
+  // zooming (so pan has no effect at zoom=1, same as the backend's
+  // maxOffset = 1 - eff_size going to 0).
+  const videoStyle = {
+    position: "absolute" as const,
+    width: `${zoom * 100}%`,
+    height: `${zoom * 100}%`,
+    left: `${-(zoom - 1) * panX * 100}%`,
+    top: `${-(zoom - 1) * panY * 100}%`,
+    objectFit: "cover" as const,
+  };
+
   return (
     <div
       style={{
@@ -81,35 +107,41 @@ export function SlotEditorCard({ slot }: { slot: Slot }) {
         marginTop: "0.75rem",
         display: "flex",
         gap: "1rem",
+        flexWrap: "wrap",
       }}
     >
       <div
         style={{
-          width: 101,
-          aspectRatio: "9 / 16",
+          width: 220,
+          aspectRatio: "16 / 9",
           overflow: "hidden",
           borderRadius: 4,
           background: "#000",
+          position: "relative",
           flexShrink: 0,
+          alignSelf: "flex-start",
         }}
       >
         <video
+          ref={videoRef}
           src={clipVideoUrl(slot.clip.local_path)}
           muted
-          loop
           autoPlay
           playsInline
-          style={{
-            width: "100%",
-            height: "100%",
-            objectFit: "cover",
-            transform: `scale(${zoom})`,
-            transformOrigin: `${panX * 100}% ${panY * 100}%`,
+          onLoadedMetadata={(e) => {
+            e.currentTarget.currentTime = trimStart;
           }}
+          onTimeUpdate={(e) => {
+            const v = e.currentTarget;
+            if (v.currentTime >= trimStart + slot.duration) {
+              v.currentTime = trimStart;
+            }
+          }}
+          style={videoStyle}
         />
       </div>
 
-      <div style={{ flex: 1, fontSize: 12 }}>
+      <div style={{ flex: "1 1 200px", fontSize: 12, minWidth: 200 }}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem" }}>
           <strong>{slot.noun}</strong>
           <span style={{ color: "#888" }}>{compositeLabel}</span>
@@ -133,19 +165,26 @@ export function SlotEditorCard({ slot }: { slot: Slot }) {
             onChange={(e) => {
               const next = parseFloat(e.target.value);
               setZoom(next);
+              // Panning has no effect until zoomed in — reset it to center
+              // so a later zoom-in starts from a predictable position.
+              if (next <= 1 && zoom > 1) {
+                setPanX(0.5);
+                setPanY(0.5);
+              }
               scheduleCropPatch(next, panX, panY);
             }}
             style={{ width: "100%" }}
           />
         </label>
-        <label style={{ display: "block", marginBottom: 4 }}>
-          Pan X
+        <label style={{ display: "block", marginBottom: 4, opacity: zoom > 1 ? 1 : 0.4 }}>
+          Pan X {zoom <= 1 ? "(zoom in to pan)" : ""}
           <input
             type="range"
             min={0}
             max={1}
             step={0.01}
             value={panX}
+            disabled={zoom <= 1}
             onChange={(e) => {
               const next = parseFloat(e.target.value);
               setPanX(next);
@@ -154,14 +193,15 @@ export function SlotEditorCard({ slot }: { slot: Slot }) {
             style={{ width: "100%" }}
           />
         </label>
-        <label style={{ display: "block", marginBottom: 4 }}>
-          Pan Y
+        <label style={{ display: "block", marginBottom: 4, opacity: zoom > 1 ? 1 : 0.4 }}>
+          Pan Y {zoom <= 1 ? "(zoom in to pan)" : ""}
           <input
             type="range"
             min={0}
             max={1}
             step={0.01}
             value={panY}
+            disabled={zoom <= 1}
             onChange={(e) => {
               const next = parseFloat(e.target.value);
               setPanY(next);
@@ -171,7 +211,9 @@ export function SlotEditorCard({ slot }: { slot: Slot }) {
           />
         </label>
         <label style={{ display: "block" }}>
-          Trim start {trimStart.toFixed(1)}s (window {slot.duration.toFixed(1)}s)
+          {trimMax > 0
+            ? `Which ${slot.duration.toFixed(1)}s of the source clip plays: ${trimStart.toFixed(1)}s–${(trimStart + slot.duration).toFixed(1)}s (of ${sourceDuration.toFixed(0)}s available)`
+            : `This clip plays in full (${slot.duration.toFixed(1)}s) — no extra source footage to slide within`}
           <input
             type="range"
             min={0}

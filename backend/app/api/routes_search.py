@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from app.models.project import Slot
 from app.pipeline.video_fetch import VideoFetchError, YtDlpFetcher
 from app.state.jobs import JobEvent, new_job_id, publish
-from app.state.project_store import get_project
+from app.state.project_store import get_project, save_project
 
 router = APIRouter(prefix="/api/search", tags=["search"])
 _fetcher = YtDlpFetcher()
@@ -42,8 +42,11 @@ async def _run_fetch_all(job_id: str, project_id: str) -> None:
         except VideoFetchError as e:
             slot.clip.download_status = "failed"
             slot.clip.needs_attention = True
+            reason = "blocked/rate-limited by YouTube" if e.blocked else str(e)
+            slot.clip.error_message = reason
+            save_project(project)
             await publish(
-                JobEvent(job_id, "error", ((i + 1) / total) * 100, f"failed for '{slot.noun}': {e}")
+                JobEvent(job_id, "error", ((i + 1) / total) * 100, f"failed for '{slot.noun}': {reason}")
             )
             continue
 
@@ -52,12 +55,14 @@ async def _run_fetch_all(job_id: str, project_id: str) -> None:
         slot.clip.quality = result.quality
         slot.clip.local_path = result.local_path
         slot.clip.source_duration = result.duration
+        slot.clip.error_message = None
         slot.clip.download_status = "ready"
         slot.clip.trim_start = 0.0
         slot.clip.trim_end = min(result.duration, slot.duration) if result.duration else slot.duration
         slot.clip.needs_attention = bool(result.duration) and result.duration < slot.duration
         slot.results.seen_video_ids = [result.video_id]
         slot.results.next_rank_to_try = 2
+        save_project(project)
         await publish(
             JobEvent(job_id, "fetching", ((i + 1) / total) * 100, f"fetched clip for '{slot.noun}'")
         )
