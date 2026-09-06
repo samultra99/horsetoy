@@ -39,7 +39,15 @@ export function ClipFetchPanel() {
               </td>
               <td>{slot.clip.download_status === "ready" ? slot.clip.quality : "—"}</td>
               <td style={{ fontFamily: "monospace", fontSize: 10 }}>
-                {slot.clip.local_path ? slot.clip.local_path.split("/").pop() : "—"}
+                {slot.clip.download_status === "failed" && slot.clip.error_message ? (
+                  <span style={{ color: "crimson", fontFamily: "inherit" }}>
+                    {slot.clip.error_message}
+                  </span>
+                ) : slot.clip.local_path ? (
+                  slot.clip.local_path.split("/").pop()
+                ) : (
+                  "—"
+                )}
               </td>
             </tr>
           ))}

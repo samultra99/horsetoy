@@ -1,11 +1,12 @@
 """Builds an ffmpeg filter_complex graph from a Project's ready slots and
 renders a single MP4.
 
-v1 simplification: the export timeline starts at the *first* noun's spoken
-timestamp, not at t=0 of the narration — the lead-in words before the first
-noun aren't covered by any clip, so rather than show a black gap we simply
-don't render that lead-in. (A future milestone could instead hold the first
-clip for that span; noted as a known v1 limitation, not a bug.)
+The export timeline starts at t=0 of the narration, not at the first noun's
+spoken timestamp: the lead-in words before the first noun (e.g. "The old"
+before "wizard") aren't associated with any noun/slot, so rather than leave
+them as a black gap, the first slot's clip is simply extended backward to
+also cover that lead-in — it starts playing at t=0 and runs through its
+normal end point instead of only starting when its noun is spoken.
 
 Compositing: consecutive slots sharing a "stack" (composite.mode=="overlay")
 are rendered as layered video over the combined time span of the stack,
@@ -27,8 +28,8 @@ from pathlib import Path
 
 from app.models.project import CropRect, Project, Slot
 
-OUTPUT_WIDTH = 1080
-OUTPUT_HEIGHT = 1920
+OUTPUT_WIDTH = 1920
+OUTPUT_HEIGHT = 1080
 OVERLAY_OPACITY = 0.5
 
 
@@ -71,21 +72,35 @@ def render_export(project: Project, output_path: Path) -> None:
 
     groups = _group_slots(slots)
 
+    # The lead-in is everything read before the first noun is spoken; the
+    # very first slot's base layer gets its render_duration extended by
+    # exactly this much and starts at offset 0, so it covers [0, group_end]
+    # instead of [slot.start_time, group_end]. No other slot/group is
+    # affected — groups are concatenated by duration, not absolute time, so
+    # extending the first one simply pushes everything after it later.
+    lead_in = slots[0].start_time
+
     inputs: list[str] = []
     filter_parts: list[str] = []
     input_index = 0
     group_video_labels: list[str] = []
     group_audio_labels: list[str] = []
+    group_spans: list[tuple[float, float]] = []
 
     for g, group in enumerate(groups):
-        group_start = group[0].start_time
+        group_start = group[0].start_time - lead_in if g == 0 else group[0].start_time
         group_end = group[-1].start_time + group[-1].duration
+        group_spans.append((group_start, group_end))
         layer_video_labels: list[str] = []
         layer_audio_labels: list[str] = []
 
         for layer_idx, slot in enumerate(group):
-            offset = slot.start_time - group_start
-            render_duration = group_end - slot.start_time
+            if layer_idx == 0:
+                offset = 0.0
+                render_duration = group_end - group_start
+            else:
+                offset = slot.start_time - group_start
+                render_duration = group_end - slot.start_time
 
             inputs += ["-ss", f"{slot.clip.trim_start}", "-i", slot.clip.local_path]
             i = input_index
@@ -136,11 +151,14 @@ def render_export(project: Project, output_path: Path) -> None:
     filter_parts.append(f"{video_concat_inputs}concat=n={n_groups}:v=1:a=0[vconcat]")
     filter_parts.append(f"{audio_concat_inputs}concat=n={n_groups}:v=0:a=1[aclips]")
 
-    total_duration = sum(g[-1].start_time + g[-1].duration - g[0].start_time for g in groups)
+    total_duration = sum(end - start for start, end in group_spans)
 
     narration_label = None
     if project.narration.audio_path:
-        inputs += ["-ss", f"{slots[0].start_time}", "-i", project.narration.audio_path]
+        # group_spans[0][0] already accounts for the lead-in (it's
+        # slots[0].start_time - lead_in, i.e. exactly 0), so the narration's
+        # trim starts from the true beginning of the paragraph too.
+        inputs += ["-ss", f"{group_spans[0][0]}", "-i", project.narration.audio_path]
         narration_input_index = input_index
         input_index += 1
         volume = 0 if project.narration.muted else 1

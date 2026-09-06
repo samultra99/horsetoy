@@ -28,6 +28,7 @@ class ClipState(BaseModel):
     local_path: str | None = None
     source_duration: float | None = None
     download_status: Literal["empty", "pending", "ready", "failed"] = "empty"
+    error_message: str | None = None
     trim_start: float = 0.0
     trim_end: float = 0.0
     crop_rect: CropRect = Field(default_factory=CropRect)

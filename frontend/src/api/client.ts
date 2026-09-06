@@ -47,6 +47,7 @@ export interface ClipState {
   local_path: string | null;
   source_duration: number | null;
   download_status: "empty" | "pending" | "ready" | "failed";
+  error_message: string | null;
   trim_start: number;
   trim_end: number;
   crop_rect: CropRect;

@@ -3,7 +3,7 @@ from pydantic import BaseModel
 
 from app.models.project import CompositeState
 from app.pipeline.composite_rng import reroll_slot
-from app.state.project_store import get_project
+from app.state.project_store import get_project, save_project
 
 router = APIRouter(prefix="/api/composite", tags=["composite"])
 
@@ -27,4 +27,5 @@ def reroll(req: RerollRequest) -> RerollResponse:
         raise HTTPException(status_code=404, detail="slot not found")
 
     reroll_slot(project.slots, req.slot_id)
+    save_project(project)
     return RerollResponse(composite=slot.composite)
