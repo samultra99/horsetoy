@@ -128,4 +128,19 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ project_id: projectId, slot_id: slotId }),
     }),
+  nextVideo: (projectId: string, slotId: string) =>
+    request<{ slot: Slot }>("/api/search/next-video", {
+      method: "POST",
+      body: JSON.stringify({ project_id: projectId, slot_id: slotId }),
+    }),
+  newSearch: (projectId: string, slotId: string) =>
+    request<{ slot: Slot }>("/api/search/new-search", {
+      method: "POST",
+      body: JSON.stringify({ project_id: projectId, slot_id: slotId }),
+    }),
+  manualSearch: (projectId: string, slotId: string, query: string) =>
+    request<{ slot: Slot }>("/api/search/manual-search", {
+      method: "POST",
+      body: JSON.stringify({ project_id: projectId, slot_id: slotId, query }),
+    }),
 };

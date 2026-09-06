@@ -30,12 +30,18 @@ const COMPOSITE_LABEL: Record<string, string> = {
 export function SlotEditorCard({ slot }: { slot: Slot }) {
   const patchSlotClip = useProjectStore((s) => s.patchSlotClip);
   const rerollComposite = useProjectStore((s) => s.rerollComposite);
+  const nextVideo = useProjectStore((s) => s.nextVideo);
+  const newSearch = useProjectStore((s) => s.newSearch);
+  const manualSearch = useProjectStore((s) => s.manualSearch);
+  const actionStatus = useProjectStore((s) => s.slotActionStatus[slot.id] ?? "idle");
+  const actionError = useProjectStore((s) => s.slotActionError[slot.id]);
 
   const initial = cropRectToZoomPan(slot.clip.crop_rect);
   const [zoom, setZoom] = useState(initial.zoom);
   const [panX, setPanX] = useState(initial.panX);
   const [panY, setPanY] = useState(initial.panY);
   const [trimStart, setTrimStart] = useState(slot.clip.trim_start);
+  const [manualQuery, setManualQuery] = useState("");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -84,6 +90,9 @@ export function SlotEditorCard({ slot }: { slot: Slot }) {
   const trimMax = Math.max(0, sourceDuration - slot.duration);
   const compositeLabel =
     slot.composite.mode === "overlay" ? `overlay ×${slot.composite.layer + 1}` : COMPOSITE_LABEL.cut;
+  const activeQuery =
+    slot.search.manual_override ?? slot.search.candidates[slot.search.active_index]?.text ?? "";
+  const busy = actionStatus === "loading";
 
   // Mirrors the backend's crop math exactly: the video is rendered at
   // zoom×100% of the frame, then shifted by pan × the room left over after
@@ -152,6 +161,52 @@ export function SlotEditorCard({ slot }: { slot: Slot }) {
           >
             🎲
           </button>
+        </div>
+
+        <div
+          style={{
+            marginBottom: "0.75rem",
+            paddingBottom: "0.5rem",
+            borderBottom: "1px solid #333",
+          }}
+        >
+          <div style={{ color: "#888", marginBottom: 4 }}>
+            Searching: <em>{activeQuery}</em>
+          </div>
+          <div style={{ display: "flex", gap: "0.4rem", marginBottom: "0.4rem" }}>
+            <button onClick={() => nextVideo(slot.id)} disabled={busy}>
+              {busy ? "…" : "Next video"}
+            </button>
+            <button onClick={() => newSearch(slot.id)} disabled={busy}>
+              {busy ? "…" : "New search"}
+            </button>
+          </div>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const query = manualQuery.trim();
+              if (query) {
+                manualSearch(slot.id, query);
+                setManualQuery("");
+              }
+            }}
+            style={{ display: "flex", gap: "0.4rem" }}
+          >
+            <input
+              type="text"
+              value={manualQuery}
+              onChange={(e) => setManualQuery(e.target.value)}
+              placeholder="Type your own search…"
+              disabled={busy}
+              style={{ flex: 1, fontSize: 12 }}
+            />
+            <button type="submit" disabled={busy || !manualQuery.trim()}>
+              Search
+            </button>
+          </form>
+          {actionStatus === "error" && actionError && (
+            <div style={{ color: "crimson", marginTop: 4 }}>{actionError}</div>
+          )}
         </div>
 
         <label style={{ display: "block", marginBottom: 4 }}>

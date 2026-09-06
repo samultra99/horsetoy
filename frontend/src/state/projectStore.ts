@@ -4,6 +4,7 @@ import { api, type ClipPatch, type NounInfo, type Slot } from "../api/client";
 type Status = "idle" | "building" | "ready" | "error";
 type FetchStatus = "idle" | "fetching" | "done" | "error";
 type ExportStatus = "idle" | "exporting" | "done" | "error";
+type SlotActionStatus = "idle" | "loading" | "error";
 
 interface ProjectState {
   projectId: string | null;
@@ -17,11 +18,16 @@ interface ProjectState {
   fetchStatus: FetchStatus;
   exportStatus: ExportStatus;
   exportUrl: string | null;
+  slotActionStatus: Record<string, SlotActionStatus>;
+  slotActionError: Record<string, string>;
   build: (text: string) => Promise<void>;
   fetchAllClips: () => Promise<void>;
   exportVideo: () => Promise<void>;
   patchSlotClip: (slotId: string, patch: ClipPatch) => Promise<void>;
   rerollComposite: (slotId: string) => Promise<void>;
+  nextVideo: (slotId: string) => Promise<void>;
+  newSearch: (slotId: string) => Promise<void>;
+  manualSearch: (slotId: string, query: string) => Promise<void>;
 }
 
 const POLL_INTERVAL_MS = 1500;
@@ -42,6 +48,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   fetchStatus: "idle",
   exportStatus: "idle",
   exportUrl: null,
+  slotActionStatus: {},
+  slotActionError: {},
   build: async (text: string) => {
     set({
       status: "building",
@@ -51,6 +59,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       exportStatus: "idle",
       exportUrl: null,
       slots: [],
+      slotActionStatus: {},
+      slotActionError: {},
     });
     try {
       const res = await api.buildProject(text);
@@ -118,6 +128,60 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       }));
     } catch (err) {
       set({ error: err instanceof Error ? err.message : String(err) });
+    }
+  },
+  nextVideo: async (slotId: string) => {
+    const { projectId } = get();
+    if (!projectId) return;
+    set((state) => ({ slotActionStatus: { ...state.slotActionStatus, [slotId]: "loading" } }));
+    try {
+      const res = await api.nextVideo(projectId, slotId);
+      set((state) => ({
+        slots: state.slots.map((s) => (s.id === slotId ? res.slot : s)),
+        slotActionStatus: { ...state.slotActionStatus, [slotId]: "idle" },
+      }));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      set((state) => ({
+        slotActionStatus: { ...state.slotActionStatus, [slotId]: "error" },
+        slotActionError: { ...state.slotActionError, [slotId]: message },
+      }));
+    }
+  },
+  newSearch: async (slotId: string) => {
+    const { projectId } = get();
+    if (!projectId) return;
+    set((state) => ({ slotActionStatus: { ...state.slotActionStatus, [slotId]: "loading" } }));
+    try {
+      const res = await api.newSearch(projectId, slotId);
+      set((state) => ({
+        slots: state.slots.map((s) => (s.id === slotId ? res.slot : s)),
+        slotActionStatus: { ...state.slotActionStatus, [slotId]: "idle" },
+      }));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      set((state) => ({
+        slotActionStatus: { ...state.slotActionStatus, [slotId]: "error" },
+        slotActionError: { ...state.slotActionError, [slotId]: message },
+      }));
+    }
+  },
+  manualSearch: async (slotId: string, query: string) => {
+    const { projectId } = get();
+    if (!projectId) return;
+    set((state) => ({ slotActionStatus: { ...state.slotActionStatus, [slotId]: "loading" } }));
+    try {
+      const res = await api.manualSearch(projectId, slotId, query);
+      set((state) => ({
+        slots: state.slots.map((s) => (s.id === slotId ? res.slot : s)),
+        slotActionStatus: { ...state.slotActionStatus, [slotId]: "idle" },
+      }));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      set((state) => ({
+        slotActionStatus: { ...state.slotActionStatus, [slotId]: "error" },
+        slotActionError: { ...state.slotActionError, [slotId]: message },
+      }));
     }
   },
 }));
