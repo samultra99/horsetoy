@@ -10,6 +10,7 @@ interface ProjectState {
   projectId: string | null;
   text: string;
   narrationAudioUrl: string | null;
+  narrationMuted: boolean;
   totalDuration: number;
   nouns: NounInfo[];
   slots: Slot[];
@@ -28,6 +29,7 @@ interface ProjectState {
   nextVideo: (slotId: string) => Promise<void>;
   newSearch: (slotId: string) => Promise<void>;
   manualSearch: (slotId: string, query: string) => Promise<void>;
+  toggleNarrationMuted: () => Promise<void>;
 }
 
 const POLL_INTERVAL_MS = 1500;
@@ -40,6 +42,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   projectId: null,
   text: "",
   narrationAudioUrl: null,
+  narrationMuted: false,
   totalDuration: 0,
   nouns: [],
   slots: [],
@@ -61,6 +64,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       slots: [],
       slotActionStatus: {},
       slotActionError: {},
+      narrationMuted: false,
     });
     try {
       const res = await api.buildProject(text);
@@ -182,6 +186,17 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         slotActionStatus: { ...state.slotActionStatus, [slotId]: "error" },
         slotActionError: { ...state.slotActionError, [slotId]: message },
       }));
+    }
+  },
+  toggleNarrationMuted: async () => {
+    const { projectId, narrationMuted } = get();
+    if (!projectId) return;
+    const next = !narrationMuted;
+    set({ narrationMuted: next }); // optimistic — it's just a toggle
+    try {
+      await api.patchNarration(projectId, next);
+    } catch (err) {
+      set({ narrationMuted: !next, error: err instanceof Error ? err.message : String(err) });
     }
   },
 }));

@@ -5,6 +5,8 @@ import { useProjectStore } from "../../state/projectStore";
 export function TimelineTrack() {
   const status = useProjectStore((s) => s.status);
   const narrationAudioUrl = useProjectStore((s) => s.narrationAudioUrl);
+  const narrationMuted = useProjectStore((s) => s.narrationMuted);
+  const toggleNarrationMuted = useProjectStore((s) => s.toggleNarrationMuted);
   const totalDuration = useProjectStore((s) => s.totalDuration);
   const nouns = useProjectStore((s) => s.nouns);
   const [currentTime, setCurrentTime] = useState(0);
@@ -22,12 +24,19 @@ export function TimelineTrack() {
 
   return (
     <div style={{ marginTop: "2rem" }}>
-      <audio
-        src={`${API_BASE}${narrationAudioUrl}`}
-        controls
-        onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
-        style={{ width: "100%" }}
-      />
+      <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+        <audio
+          src={`${API_BASE}${narrationAudioUrl}`}
+          controls
+          muted={narrationMuted}
+          onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
+          style={{ width: "100%" }}
+        />
+        <label style={{ fontSize: 12, whiteSpace: "nowrap", display: "flex", gap: 4 }}>
+          <input type="checkbox" checked={narrationMuted} onChange={() => toggleNarrationMuted()} />
+          Mute narration in export
+        </label>
+      </div>
       <div
         style={{
           position: "relative",

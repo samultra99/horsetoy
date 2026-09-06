@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from app.models.project import CropRect, Project, Slot
+from app.models.project import CropRect, NarrationState, Project, Slot
 from app.state.project_store import get_project, save_project
 
 router = APIRouter(prefix="/api/project", tags=["project"])
@@ -13,6 +13,21 @@ def read_project(project_id: str) -> Project:
     if project is None:
         raise HTTPException(status_code=404, detail="project not found")
     return project
+
+
+class NarrationPatchRequest(BaseModel):
+    muted: bool
+
+
+@router.patch("/{project_id}/narration", response_model=NarrationState)
+def patch_narration(project_id: str, req: NarrationPatchRequest) -> NarrationState:
+    project = get_project(project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="project not found")
+
+    project.narration.muted = req.muted
+    save_project(project)
+    return project.narration
 
 
 class ClipPatchRequest(BaseModel):

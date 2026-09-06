@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { API_BASE, type Slot } from "../../api/client";
 import { useProjectStore } from "../../state/projectStore";
+import { SlotSearchControls } from "./SlotSearchControls";
 
 function clipVideoUrl(localPath: string): string {
   const filename = localPath.split("/").pop() ?? "";
@@ -27,22 +28,28 @@ const COMPOSITE_LABEL: Record<string, string> = {
   cut: "cut",
 };
 
+const CARD_STYLE: CSSProperties = {
+  border: "1px solid #444",
+  borderRadius: 6,
+  padding: "0.75rem",
+  marginTop: "0.75rem",
+  display: "flex",
+  gap: "1rem",
+  flexWrap: "wrap",
+};
+
 export function SlotEditorCard({ slot }: { slot: Slot }) {
   const patchSlotClip = useProjectStore((s) => s.patchSlotClip);
   const rerollComposite = useProjectStore((s) => s.rerollComposite);
-  const nextVideo = useProjectStore((s) => s.nextVideo);
-  const newSearch = useProjectStore((s) => s.newSearch);
-  const manualSearch = useProjectStore((s) => s.manualSearch);
-  const actionStatus = useProjectStore((s) => s.slotActionStatus[slot.id] ?? "idle");
-  const actionError = useProjectStore((s) => s.slotActionError[slot.id]);
 
   const initial = cropRectToZoomPan(slot.clip.crop_rect);
   const [zoom, setZoom] = useState(initial.zoom);
   const [panX, setPanX] = useState(initial.panX);
   const [panY, setPanY] = useState(initial.panY);
   const [trimStart, setTrimStart] = useState(slot.clip.trim_start);
-  const [manualQuery, setManualQuery] = useState("");
+  const [volume, setVolume] = useState(slot.clip.volume);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const volumeDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
@@ -51,6 +58,7 @@ export function SlotEditorCard({ slot }: { slot: Slot }) {
     setPanX(next.panX);
     setPanY(next.panY);
     setTrimStart(slot.clip.trim_start);
+    setVolume(slot.clip.volume);
     // Only re-sync from server state when the slot identity changes, not on
     // every render — local slider drags shouldn't get clobbered by the
     // debounced PATCH's own response echoing back.
@@ -84,15 +92,40 @@ export function SlotEditorCard({ slot }: { slot: Slot }) {
     }, 250);
   };
 
+  const scheduleVolumePatch = (nextVolume: number) => {
+    if (volumeDebounceRef.current) clearTimeout(volumeDebounceRef.current);
+    volumeDebounceRef.current = setTimeout(() => {
+      patchSlotClip(slot.id, { volume: nextVolume });
+    }, 250);
+  };
+
+  const compositeLabel =
+    slot.composite.mode === "overlay" ? `overlay ×${slot.composite.layer + 1}` : COMPOSITE_LABEL.cut;
+
+  // A failed fetch still gets a card — without the video/crop/trim/volume
+  // controls, which need an actual downloaded clip — so the user has a way
+  // to retry (next-video/new-search/manual-search) instead of being stuck.
+  if (slot.clip.download_status === "failed") {
+    return (
+      <div style={CARD_STYLE}>
+        <div style={{ flex: "1 1 200px", fontSize: 12, minWidth: 200 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem" }}>
+            <strong>{slot.noun}</strong>
+            <span style={{ color: "crimson" }}>fetch failed</span>
+          </div>
+          {slot.clip.error_message && (
+            <div style={{ color: "crimson", marginBottom: "0.5rem" }}>{slot.clip.error_message}</div>
+          )}
+          <SlotSearchControls slot={slot} />
+        </div>
+      </div>
+    );
+  }
+
   if (slot.clip.download_status !== "ready" || !slot.clip.local_path) return null;
 
   const sourceDuration = slot.clip.source_duration ?? slot.duration;
   const trimMax = Math.max(0, sourceDuration - slot.duration);
-  const compositeLabel =
-    slot.composite.mode === "overlay" ? `overlay ×${slot.composite.layer + 1}` : COMPOSITE_LABEL.cut;
-  const activeQuery =
-    slot.search.manual_override ?? slot.search.candidates[slot.search.active_index]?.text ?? "";
-  const busy = actionStatus === "loading";
 
   // Mirrors the backend's crop math exactly: the video is rendered at
   // zoom×100% of the frame, then shifted by pan × the room left over after
@@ -108,17 +141,7 @@ export function SlotEditorCard({ slot }: { slot: Slot }) {
   };
 
   return (
-    <div
-      style={{
-        border: "1px solid #444",
-        borderRadius: 6,
-        padding: "0.75rem",
-        marginTop: "0.75rem",
-        display: "flex",
-        gap: "1rem",
-        flexWrap: "wrap",
-      }}
-    >
+    <div style={CARD_STYLE}>
       <div
         style={{
           width: 220,
@@ -170,43 +193,7 @@ export function SlotEditorCard({ slot }: { slot: Slot }) {
             borderBottom: "1px solid #333",
           }}
         >
-          <div style={{ color: "#888", marginBottom: 4 }}>
-            Searching: <em>{activeQuery}</em>
-          </div>
-          <div style={{ display: "flex", gap: "0.4rem", marginBottom: "0.4rem" }}>
-            <button onClick={() => nextVideo(slot.id)} disabled={busy}>
-              {busy ? "…" : "Next video"}
-            </button>
-            <button onClick={() => newSearch(slot.id)} disabled={busy}>
-              {busy ? "…" : "New search"}
-            </button>
-          </div>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              const query = manualQuery.trim();
-              if (query) {
-                manualSearch(slot.id, query);
-                setManualQuery("");
-              }
-            }}
-            style={{ display: "flex", gap: "0.4rem" }}
-          >
-            <input
-              type="text"
-              value={manualQuery}
-              onChange={(e) => setManualQuery(e.target.value)}
-              placeholder="Type your own search…"
-              disabled={busy}
-              style={{ flex: 1, fontSize: 12 }}
-            />
-            <button type="submit" disabled={busy || !manualQuery.trim()}>
-              Search
-            </button>
-          </form>
-          {actionStatus === "error" && actionError && (
-            <div style={{ color: "crimson", marginTop: 4 }}>{actionError}</div>
-          )}
+          <SlotSearchControls slot={slot} />
         </div>
 
         <label style={{ display: "block", marginBottom: 4 }}>
@@ -283,6 +270,31 @@ export function SlotEditorCard({ slot }: { slot: Slot }) {
             }}
             style={{ width: "100%" }}
           />
+        </label>
+        <label style={{ display: "block", marginTop: 8, opacity: slot.clip.muted ? 0.4 : 1 }}>
+          Clip volume in export: {slot.clip.muted ? "muted" : `${Math.round(volume * 100)}%`}
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.05}
+            value={volume}
+            disabled={slot.clip.muted}
+            onChange={(e) => {
+              const next = parseFloat(e.target.value);
+              setVolume(next);
+              scheduleVolumePatch(next);
+            }}
+            style={{ width: "100%" }}
+          />
+        </label>
+        <label style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 4 }}>
+          <input
+            type="checkbox"
+            checked={slot.clip.muted}
+            onChange={(e) => patchSlotClip(slot.id, { muted: e.target.checked })}
+          />
+          Mute this clip's audio in export
         </label>
       </div>
     </div>

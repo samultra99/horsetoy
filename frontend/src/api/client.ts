@@ -83,11 +83,16 @@ export interface BuildResponse {
   slots: Slot[];
 }
 
+export interface NarrationState {
+  audio_path: string | null;
+  muted: boolean;
+}
+
 export interface Project {
   id: string;
   text: string;
   slots: Slot[];
-  narration: { audio_path: string | null; muted: boolean };
+  narration: NarrationState;
   total_duration: number;
 }
 
@@ -142,5 +147,10 @@ export const api = {
     request<{ slot: Slot }>("/api/search/manual-search", {
       method: "POST",
       body: JSON.stringify({ project_id: projectId, slot_id: slotId, query }),
+    }),
+  patchNarration: (projectId: string, muted: boolean) =>
+    request<NarrationState>(`/api/project/${projectId}/narration`, {
+      method: "PATCH",
+      body: JSON.stringify({ muted }),
     }),
 };
