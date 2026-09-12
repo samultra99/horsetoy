@@ -8,9 +8,10 @@ matching the spec's "sometimes two or three clips stack before a new clip
 appears alone."
 
 This assignment happens once, at timeline-build time, same as noun timing.
-Re-rolling one slot's composite choice later (the "regenerate" badge) is a
-separate, narrower operation — see reroll_slot in this module — that only
-touches that one slot, not the whole downstream stack.
+Two narrower operations touch one slot's choice after the fact, both
+scoped the same way (only that slot's own composite fields, no downstream
+cascade): reroll_slot re-rolls it against the RNG again, and set_slot_mode
+pins it to a specific cut/overlay choice the user picked directly.
 """
 
 import random
@@ -72,3 +73,51 @@ def reroll_slot(slots: list[Slot], slot_id: str, rng: random.Random | None = Non
         slot.composite.mode = "overlay"
         slot.composite.layer = prev_layer + 1
         slot.composite.overlay_of = list(prev.composite.overlay_of) + [prev.id]
+    # A reroll hands the choice back to the RNG, so it's no longer a
+    # user-pinned override — clears whatever set_slot_mode last set.
+    slot.composite.locked = False
+
+
+class CompositeEditError(Exception):
+    pass
+
+
+def set_slot_mode(slots: list[Slot], slot_id: str, mode: str) -> None:
+    """Manually pins a slot's cut/overlay choice (the editable counterpart
+    to reroll_slot's random one). Same "no downstream cascade" contract as
+    reroll_slot — only the edited slot's own composite fields are touched.
+    """
+    if mode not in ("cut", "overlay"):
+        raise CompositeEditError(f"invalid mode: {mode!r}")
+
+    index = next((i for i, s in enumerate(slots) if s.id == slot_id), None)
+    if index is None:
+        raise CompositeEditError("slot not found")
+
+    slot = slots[index]
+
+    if mode == "cut":
+        slot.composite.mode = "cut"
+        slot.composite.layer = 0
+        slot.composite.overlay_of = []
+        # Length/fades only mean anything for an overlay; drop them so a
+        # later re-stack starts from the default "covers the whole stack"
+        # rather than silently reusing a length from a previous edit.
+        slot.composite.duration = None
+        slot.composite.fade_in = 0.0
+        slot.composite.fade_out = 0.0
+        slot.composite.locked = True
+        return
+
+    if index == 0:
+        raise CompositeEditError("the first clip can't stack onto anything before it")
+
+    prev = slots[index - 1]
+    prev_layer = prev.composite.layer if prev.composite.mode == "overlay" else 0
+    if prev_layer + 1 >= MAX_LAYERS:
+        raise CompositeEditError(f"that stack is already at the maximum of {MAX_LAYERS} layers")
+
+    slot.composite.mode = "overlay"
+    slot.composite.layer = prev_layer + 1
+    slot.composite.overlay_of = list(prev.composite.overlay_of) + [prev.id]
+    slot.composite.locked = True

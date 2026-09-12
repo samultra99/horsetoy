@@ -10,22 +10,23 @@ Two quality tiers:
     editing — cheap to fetch, plenty for on-screen preview and export
     smoke-testing.
   - "full" (1080p): the resolution used for the final export once the user
-    is done editing. Re-fetching by (video_id, quality) is what "systematic
-    storage of the clip link" is for — video_id/source_url are stored on
-    the Slot so a later milestone can re-resolve and download the full-res
-    version of the exact same video without re-searching.
+    is done editing. video_id/source_url are stored on the Slot precisely so
+    the render step can re-resolve and download the full-res version of the
+    exact same video via fetch_by_video_id — no re-searching, so there's no
+    risk of a different video coming back than the one the user reviewed.
 
-The preview/full swap-at-export-time flow itself is a later milestone —
-this module only makes the two quality tiers fetchable; nothing currently
-calls fetch_by_rank with quality="full".
+fetch_by_video_id (used by the export step, see routes_render.py) never
+touches the Slot's own local_path/quality — the editing preview stays on
+the cheap 360p file throughout; the 1080p file is fetched into a separate
+cache entry and only ever handed to the renderer for the one export run.
 
 Downloads are capped to the first MAX_DOWNLOAD_SECONDS of the source video
 via yt-dlp's download_ranges — we only ever need a few seconds per slot, so
 pulling a full (sometimes multi-GB, multi-hour) source video is pure waste.
-The cap leaves headroom beyond a typical slot duration so a later
-trim-window adjustment (M4) still has material to work with. (When the
-future full-quality re-fetch lands, it should likely narrow this to the
-slot's actual trim window instead of a blanket cap — noted for then.)
+The cap leaves headroom beyond a typical slot duration so trim-window
+adjustments still have material to work with, and since both quality tiers
+of a given video share that same cap, a trim window picked against the
+360p preview stays valid against the 1080p re-fetch.
 """
 
 import re
@@ -90,37 +91,20 @@ def _capped_range_selector(info_dict: dict, _ydl: object):
 
 class VideoFetcher(Protocol):
     def fetch_by_rank(self, query: str, rank: int, quality: Quality) -> FetchResult: ...
+    def fetch_by_video_id(self, video_id: str, source_url: str, quality: Quality) -> FetchResult: ...
 
 
 class YtDlpFetcher:
     """VideoFetcher backed by yt-dlp's ytsearchN: pseudo-URL, no official API."""
 
-    def fetch_by_rank(self, query: str, rank: int = 1, quality: Quality = "preview") -> FetchResult:
-        search_opts = {"quiet": True, "no_warnings": True, "noplaylist": True}
-        try:
-            with yt_dlp.YoutubeDL(search_opts) as ydl:
-                info = ydl.extract_info(f"ytsearch{rank}:{query}", download=False)
-        except yt_dlp.utils.DownloadError as e:
-            raise VideoFetchError(str(e), blocked=_looks_blocked(str(e))) from e
-
-        entries = [e for e in (info.get("entries") or []) if e]
-        if len(entries) < rank:
-            raise VideoFetchError(f"No result at rank {rank} for query: {query!r}")
-        target = entries[rank - 1]
-
-        video_id = target["id"]
-        source_url = target.get("webpage_url") or f"https://www.youtube.com/watch?v={video_id}"
-        cache_key = f"{_slugify(query)}-{video_id}-{quality}"
+    def _download(self, cache_key: str, source_url: str, quality: Quality) -> tuple[str, str]:
+        """Downloads (or reuses a cached copy of) source_url at the given
+        quality, keyed by cache_key. Returns (video_id, local_path); the
+        caller already knows video_id, this just does the fetch/cache dance.
+        """
         existing = list(CLIPS_CACHE_DIR.glob(f"{cache_key}.*"))
         if existing:
-            local_path = str(existing[0])
-            return FetchResult(
-                video_id=video_id,
-                source_url=source_url,
-                local_path=local_path,
-                duration=_probe_duration(local_path),
-                quality=quality,
-            )
+            return str(existing[0])
 
         max_height = QUALITY_MAX_HEIGHT[quality]
         out_template = str(CLIPS_CACHE_DIR / f"{cache_key}.%(ext)s")
@@ -148,6 +132,42 @@ class YtDlpFetcher:
                         local_path = str(merged)
         except yt_dlp.utils.DownloadError as e:
             raise VideoFetchError(str(e), blocked=_looks_blocked(str(e))) from e
+        return local_path
+
+    def fetch_by_rank(self, query: str, rank: int = 1, quality: Quality = "preview") -> FetchResult:
+        search_opts = {"quiet": True, "no_warnings": True, "noplaylist": True}
+        try:
+            with yt_dlp.YoutubeDL(search_opts) as ydl:
+                info = ydl.extract_info(f"ytsearch{rank}:{query}", download=False)
+        except yt_dlp.utils.DownloadError as e:
+            raise VideoFetchError(str(e), blocked=_looks_blocked(str(e))) from e
+
+        entries = [e for e in (info.get("entries") or []) if e]
+        if len(entries) < rank:
+            raise VideoFetchError(f"No result at rank {rank} for query: {query!r}")
+        target = entries[rank - 1]
+
+        video_id = target["id"]
+        source_url = target.get("webpage_url") or f"https://www.youtube.com/watch?v={video_id}"
+        cache_key = f"{_slugify(query)}-{video_id}-{quality}"
+        local_path = self._download(cache_key, source_url, quality)
+
+        return FetchResult(
+            video_id=video_id,
+            source_url=source_url,
+            local_path=local_path,
+            duration=_probe_duration(local_path),
+            quality=quality,
+        )
+
+    def fetch_by_video_id(self, video_id: str, source_url: str, quality: Quality) -> FetchResult:
+        """Re-resolves a specific, already-known video (rather than a fresh
+        search) at the given quality. This is what the export step uses to
+        swap the 360p editing preview for a 1080p source without risking a
+        different video coming back from a re-run search.
+        """
+        cache_key = f"{video_id}-{quality}"
+        local_path = self._download(cache_key, source_url, quality)
 
         return FetchResult(
             video_id=video_id,
