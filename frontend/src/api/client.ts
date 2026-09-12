@@ -62,6 +62,18 @@ export interface CompositeState {
   layer: number;
   overlay_of: string[];
   locked: boolean;
+  opacity: number;
+  duration: number | null;
+  fade_in: number;
+  fade_out: number;
+}
+
+export interface CompositePatch {
+  mode?: "cut" | "overlay";
+  opacity?: number;
+  duration?: number;
+  fade_in?: number;
+  fade_out?: number;
 }
 
 export interface Slot {
@@ -85,6 +97,7 @@ export interface BuildResponse {
 
 export interface NarrationState {
   audio_path: string | null;
+  audio_url: string | null;
   muted: boolean;
 }
 
@@ -119,7 +132,7 @@ export const api = {
     }),
   getProject: (projectId: string) => request<Project>(`/api/project/${projectId}`),
   exportProject: (projectId: string) =>
-    request<{ export_url: string }>("/api/render/export", {
+    request<{ export_url: string; download_url: string }>("/api/render/export", {
       method: "POST",
       body: JSON.stringify({ project_id: projectId }),
     }),
@@ -132,6 +145,11 @@ export const api = {
     request<{ composite: CompositeState }>("/api/composite/reroll", {
       method: "POST",
       body: JSON.stringify({ project_id: projectId, slot_id: slotId }),
+    }),
+  patchSlotComposite: (projectId: string, slotId: string, patch: CompositePatch) =>
+    request<Slot>(`/api/project/${projectId}/slots/${slotId}/composite`, {
+      method: "PATCH",
+      body: JSON.stringify(patch),
     }),
   nextVideo: (projectId: string, slotId: string) =>
     request<{ slot: Slot }>("/api/search/next-video", {
