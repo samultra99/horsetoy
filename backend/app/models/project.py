@@ -43,6 +43,12 @@ class CompositeState(BaseModel):
     layer: int = 0
     overlay_of: list[str] = Field(default_factory=list)
     locked: bool = False
+    opacity: float = 0.5
+    # How long the overlay stays up, in seconds from the slot's own start.
+    # None means "until the end of the stack it belongs to".
+    duration: float | None = None
+    fade_in: float = 0.0
+    fade_out: float = 0.0
 
 
 class Slot(BaseModel):
@@ -58,6 +64,9 @@ class Slot(BaseModel):
 
 class NarrationState(BaseModel):
     audio_path: str | None = None
+    # Where the editor can stream the same file from; stored rather than
+    # derived so a project reopened later can rebuild its player directly.
+    audio_url: str | None = None
     muted: bool = False
 
 

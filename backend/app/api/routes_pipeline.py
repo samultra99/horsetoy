@@ -81,11 +81,18 @@ async def build_project(req: BuildRequest) -> BuildResponse:
     timed_nouns.sort(key=lambda item: item[1])
 
     slots: list[Slot] = []
-    for i, (noun, start_time, candidates) in enumerate(timed_nouns):
+    # Slot spans have to tile the timeline exactly — no gaps, no overlaps.
+    # Two nouns spoken closer together than MIN_SLOT_DURATION would otherwise
+    # produce overlapping spans, and since the renderer concatenates spans by
+    # length, the picture would drift steadily ahead of the narration.
+    cursor = 0.0
+    for i, (noun, spoken_at, candidates) in enumerate(timed_nouns):
+        start_time = max(spoken_at, cursor)
         next_start = (
             timed_nouns[i + 1][1] if i + 1 < len(timed_nouns) else timing.total_duration + TAIL_DURATION
         )
         duration = max(MIN_SLOT_DURATION, next_start - start_time)
+        cursor = start_time + duration
         slots.append(
             Slot(
                 id=noun.id,
@@ -107,7 +114,11 @@ async def build_project(req: BuildRequest) -> BuildResponse:
         id=project_id,
         text=text,
         slots=slots,
-        narration=NarrationState(audio_path=timing.narration_audio_path, muted=False),
+        narration=NarrationState(
+            audio_path=timing.narration_audio_path,
+            audio_url=f"/media/narration/{narration_filename}",
+            muted=False,
+        ),
         total_duration=timing.total_duration,
     )
     save_project(project)
