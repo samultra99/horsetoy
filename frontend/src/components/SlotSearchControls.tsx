@@ -1,6 +1,6 @@
 import { useState } from "react";
-import type { Slot } from "../../api/client";
-import { useProjectStore } from "../../state/projectStore";
+import type { Slot } from "../api/client";
+import { useProjectStore } from "../state/projectStore";
 
 export function SlotSearchControls({ slot }: { slot: Slot }) {
   const nextVideo = useProjectStore((s) => s.nextVideo);
@@ -16,43 +16,59 @@ export function SlotSearchControls({ slot }: { slot: Slot }) {
 
   return (
     <div>
-      <div style={{ color: "#888", marginBottom: 4 }}>
-        Searching: <em>{activeQuery}</em>
-      </div>
-      <div style={{ display: "flex", gap: "0.4rem", marginBottom: "0.4rem" }}>
-        <button onClick={() => nextVideo(slot.id)} disabled={busy}>
-          {busy ? "…" : "Next video"}
-        </button>
-        <button onClick={() => newSearch(slot.id)} disabled={busy}>
-          {busy ? "…" : "New search"}
-        </button>
-      </div>
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          const query = manualQuery.trim();
-          if (query) {
-            manualSearch(slot.id, query);
-            setManualQuery("");
-          }
-        }}
-        style={{ display: "flex", gap: "0.4rem" }}
-      >
-        <input
-          type="text"
-          value={manualQuery}
-          onChange={(e) => setManualQuery(e.target.value)}
-          placeholder="Type your own search…"
+      <div className="swap-clip-row">
+        <button
+          className="icon-btn"
+          title="Try the next video for this search"
+          aria-label="Next video"
+          onClick={() => nextVideo(slot.id)}
           disabled={busy}
-          style={{ flex: 1, fontSize: 12 }}
-        />
-        <button type="submit" disabled={busy || !manualQuery.trim()}>
-          Search
+        >
+          {busy ? "…" : "⏭"}
         </button>
-      </form>
-      {actionStatus === "error" && actionError && (
-        <div style={{ color: "crimson", marginTop: 4 }}>{actionError}</div>
-      )}
+        <button
+          className="icon-btn"
+          title="Start a fresh random search"
+          aria-label="New search"
+          onClick={() => newSearch(slot.id)}
+          disabled={busy}
+        >
+          {busy ? "…" : "🔄"}
+        </button>
+        <form
+          className="swap-clip-search"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const query = manualQuery.trim();
+            if (query) {
+              manualSearch(slot.id, query);
+              setManualQuery("");
+            }
+          }}
+        >
+          <input
+            type="text"
+            className="text-input"
+            value={manualQuery}
+            onChange={(e) => setManualQuery(e.target.value)}
+            placeholder="Type your own search…"
+            disabled={busy}
+          />
+          <button
+            type="submit"
+            className="icon-btn"
+            title="Search for this instead"
+            aria-label="Search"
+            disabled={busy || !manualQuery.trim()}
+          >
+            🔍
+          </button>
+        </form>
+      </div>
+      <div className="swap-clip-query">
+        Searching: <em>{activeQuery || "…"}</em>
+      </div>
+      {actionStatus === "error" && actionError && <div className="error-text">{actionError}</div>}
     </div>
   );
 }
